@@ -8,6 +8,8 @@ class KeywordRanking(Base):
     id = Column(Integer, primary_key=True, autoincrement=True)
     week_key = Column(String(10), nullable=False)
     keyword = Column(String(200), nullable=False)
+    keyword_type = Column(String(50))
+    recommendation_reasons_json = Column(JSON)
     rank_no = Column(Integer)
     final_score = Column(DECIMAL(10, 2), default=0)
     issue_score = Column(DECIMAL(10, 2), default=0)

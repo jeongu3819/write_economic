@@ -43,24 +43,38 @@ export default function KeywordCard({ ranking }: KeywordCardProps): React.JSX.El
           <span className="metric-value">{formatNumber(ranking.document_count)}</span>
         </div>
         <div className="metric-item">
-          <span className="metric-label">📰 관련 뉴스</span>
+          <span className="metric-label">📰 뉴스</span>
           <span className="metric-value">{ranking.related_news_count}건</span>
-        </div>
-        <div className="metric-item">
-          <span className="metric-label">📈 관련 종목</span>
-          <span className="metric-value">{ranking.related_symbol_count}개</span>
         </div>
       </div>
 
-      <div className="keyword-card-footer">
-        {ranking.competition_level && (
-          <span className={`badge badge-${ranking.competition_level}`}>
-            경쟁 {ranking.competition_level === 'low' ? '낮음' : ranking.competition_level === 'medium' ? '보통' : '높음'}
+      {ranking.recommendation_reasons_json && ranking.recommendation_reasons_json.length > 0 && (
+        <div style={{ marginTop: 'var(--space-md)', padding: 'var(--space-sm) 0', borderTop: '1px solid var(--color-border)' }}>
+          <div style={{ fontSize: 'var(--font-size-xs)', fontWeight: 600, color: 'var(--color-primary-dark)', marginBottom: 'var(--space-xs)' }}>
+            💡 추천 사유
+          </div>
+          <ul style={{ margin: 0, paddingLeft: 'var(--space-md)', fontSize: 'var(--font-size-xs)', color: 'var(--color-text-secondary)' }}>
+            {ranking.recommendation_reasons_json.map((r, i) => (
+              <li key={i} style={{ marginBottom: 2 }}>{r}</li>
+            ))}
+          </ul>
+        </div>
+      )}
+
+      <div className="keyword-card-footer" style={{ marginTop: 'var(--space-md)' }}>
+        {ranking.keyword_type && (
+          <span className={`badge`} style={{ 
+            background: ranking.keyword_type === 'traffic' ? '#fff0f0' : ranking.keyword_type === 'investment' ? '#f0f4ff' : '#f0fff4',
+            color: ranking.keyword_type === 'traffic' ? '#e53e3e' : ranking.keyword_type === 'investment' ? '#3182ce' : '#38a169',
+            border: 'none',
+            fontWeight: 600
+          }}>
+            {ranking.keyword_type === 'traffic' ? '🔥 트래픽형' : ranking.keyword_type === 'investment' ? '💰 투자/주식형' : '📝 블로그 제목형'}
           </span>
         )}
         {ranking.recommended_channel && (
           <span className={`badge badge-${ranking.recommended_channel}`}>
-            {ranking.recommended_channel === 'naver' ? '네이버 추천' : ranking.recommended_channel === 'tistory' ? '티스토리 추천' : '둘 다 가능'}
+            {ranking.recommended_channel === 'naver' ? 'N 검색 추천' : ranking.recommended_channel === 'tistory' ? 'T 검색 추천' : 'N+T 동시 추천'}
           </span>
         )}
       </div>

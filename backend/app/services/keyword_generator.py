@@ -16,24 +16,32 @@ logger = get_logger("keyword_generator")
 
 client = AsyncOpenAI(api_key=OPENAI_API_KEY)
 
-KEYWORD_EXTRACTION_PROMPT = """다음 뉴스/이슈 목록을 분석하여 블로그 작성에 적합한 키워드 후보를 추출해주세요.
+KEYWORD_EXTRACTION_PROMPT = """다음 뉴스/이슈 목록을 분석하여 네이버/Tistory 블로그 작성에 매우 적합한 맞춤형 추천 키워드를 추출해주세요.
 
-## 규칙
+## 추출 기준 및 규칙
 1. 15~25개의 키워드 후보를 추출합니다.
-2. 각 키워드는 블로그 주제로 적합해야 합니다.
-3. 유사한 키워드는 하나로 통합합니다. (예: "삼성전자 실적" vs "삼성전자 분기실적" → 하나로)
-4. ★중요★ 해외(Yahoo Finance)와 국내(Naver) 언론 양쪽에서 공통으로 다루는 내용이나 비슷한 맥락의 뉴스를 '가장 핫한 뉴스'로 파악하여 최우선적으로 상위 키워드로 추출하세요.
-5. 각 키워드에 대해 관련 뉴스 수, 관련 종목 수, 1줄 요약을 제공합니다.
-6. 반드시 한국어로 작성합니다.
+2. 각 키워드의 성격(keyword_type)을 다음 3가지 중 하나로 명확하게 분류하세요:
+   - "traffic": 조회수/대중 관심 유도용 숏 텀 이슈 (예: 트럼프 관세, AI 반도체, 유가 급등)
+   - "investment": 실제 주식/투자자 관심형 (예: 실적 발표, 가이던스 상향, 공매도 리포트)
+   - "blog_title": 블로그 제목에 바로 넣기 좋은 구/절 형태 (예: '트럼프 관세 수혜주 정리', '테슬라 생산량 감소 원인')
+3. 불용어(의미가 약한 단어: 오늘, 관련, 발표, 뉴스, 기사, 가능성, 전망 등) 단독 키워드 추출을 엄격히 금지합니다.
+4. 기업명, 산업 키워드, 한글/영문 혼합(예: AI, 테슬라, BYD)을 살리되 유사한 내용은 하나로 통합하세요.
+5. ★중요★ 해외(Yahoo)와 국내(Naver) 얼론 양쪽에서 공통으로 다루는 내용, 여러 기사에서 반복 등장하는 내용을 최우선 핵심 키워드로 뽑으세요.
+6. 이 키워드를 추천하는 명확한 근거(reasons)를 배열로 2~3개 작성해주세요.
+   - 예: ["최근 24시간 동안 관련 뉴스 5건 집중", "Naver와 Yahoo 뉴스 양쪽에 공통 등장", "투자자 검색 유입 가능성이 매우 높음"]
+7. 각 키워드에 대해 관련 뉴스 수, 관련 종목 수, 1줄 요약도 함께 제공합니다.
+8. 반드시 한국어로 작성합니다.
 
 ## 출력 형식 (JSON 배열)
-각 항목은 아래 형태입니다:
+각 항목은 아래 형태를 따르세요:
 {
   "keyword": "키워드명",
-  "origin_summary": "이 키워드가 왜 이슈인지 1줄 요약 (국내외 공통 핫이슈인 경우 그 점을 강조)",
+  "keyword_type": "traffic|investment|blog_title",
+  "origin_summary": "1줄 요약 (국내외 공통 이슈 강조)",
+  "reasons": ["추천 근거 1", "추천 근거 2"],
   "related_news_count": 숫자,
   "related_symbol_count": 숫자,
-  "source_ids": [관련 뉴스 인덱스 번호들]
+  "source_ids": [사용된 뉴스 인덱스 번호 리스트]
 }
 """
 
@@ -46,12 +54,14 @@ KEYWORD_SCHEMA = {
                 "type": "object",
                 "properties": {
                     "keyword": {"type": "string"},
+                    "keyword_type": {"type": "string", "enum": ["traffic", "investment", "blog_title"]},
                     "origin_summary": {"type": "string"},
+                    "reasons": {"type": "array", "items": {"type": "string"}},
                     "related_news_count": {"type": "integer"},
                     "related_symbol_count": {"type": "integer"},
                     "source_ids": {"type": "array", "items": {"type": "integer"}},
                 },
-                "required": ["keyword", "origin_summary", "related_news_count", "related_symbol_count", "source_ids"],
+                "required": ["keyword", "keyword_type", "origin_summary", "reasons", "related_news_count", "related_symbol_count", "source_ids"],
                 "additionalProperties": False,
             },
         }
@@ -119,6 +129,8 @@ async def generate_keywords(db: AsyncSession, week_key: str) -> list[KeywordCand
         candidate = KeywordCandidate(
             week_key=week_key,
             keyword=kw["keyword"],
+            keyword_type=kw.get("keyword_type", "traffic"),
+            recommendation_reasons_json=kw.get("reasons", []),
             origin_summary=kw.get("origin_summary", ""),
             related_news_count=kw.get("related_news_count", 0),
             related_symbol_count=kw.get("related_symbol_count", 0),

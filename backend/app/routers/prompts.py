@@ -40,7 +40,7 @@ async def create_prompt(body: PromptCreateRequest, db: AsyncSession = Depends(ge
         template_type=body.template_type,
         version=next_version,
         system_prompt=body.system_prompt,
-        schema_json=body.schema_json,
+        schema_json=body.template_schema_json,
         is_active=True,
     )
 
@@ -57,9 +57,10 @@ async def create_prompt(body: PromptCreateRequest, db: AsyncSession = Depends(ge
     await db.commit()
     await db.refresh(prompt)
 
-    return api_response(
-        data=PromptTemplateOut.model_validate(prompt).model_dump()
-    )
+    # Map schema_json to template_schema_json for output
+    dump = PromptTemplateOut.model_validate(prompt).model_dump()
+    dump["template_schema_json"] = prompt.schema_json
+    return api_response(data=dump)
 
 
 @router.patch("/{prompt_id}")
@@ -80,8 +81,8 @@ async def update_prompt(
         prompt.template_name = body.template_name
     if body.system_prompt is not None:
         prompt.system_prompt = body.system_prompt
-    if body.schema_json is not None:
-        prompt.schema_json = body.schema_json
+    if body.template_schema_json is not None:
+        prompt.schema_json = body.template_schema_json
     if body.is_active is not None:
         prompt.is_active = body.is_active
 

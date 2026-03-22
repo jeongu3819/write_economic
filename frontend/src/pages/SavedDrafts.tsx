@@ -44,6 +44,23 @@ export default function SavedDrafts(): React.JSX.Element {
     }
   }
 
+  const handleDelete = async (e: React.MouseEvent, id: number) => {
+    e.stopPropagation()
+    if (!window.confirm('정말로 이 초안을 삭제하시겠습니까?')) return
+
+    try {
+      const res = await api.delete<unknown, ApiResponse<{deleted: boolean}>>(`/drafts/${id}`)
+      if (res.data?.deleted || res.success) {
+        setDrafts(drafts.filter(d => d.id !== id))
+      } else {
+        alert(res.error || '삭제 실패')
+      }
+    } catch (err) {
+      console.error(err)
+      alert('삭제 중 오류가 발생했습니다.')
+    }
+  }
+
   return (
     <div>
       <div className="page-header">
@@ -76,19 +93,29 @@ export default function SavedDrafts(): React.JSX.Element {
               onClick={() => navigate(`/draft/${d.keyword_ranking_id || d.id}`)}
             >
               <div>
-                <div style={{ fontWeight: 600, fontSize: 'var(--font-size-lg)', marginBottom: 4 }}>
-                  {d.keyword}
+                <div style={{ display: 'flex', alignItems: 'center', gap: 'var(--space-sm)', marginBottom: 4 }}>
+                  <div style={{ fontWeight: 600, fontSize: 'var(--font-size-lg)' }}>
+                    {d.keyword}
+                  </div>
+                  <StatusBadge status={d.status} />
                 </div>
-                <div style={{ fontSize: 'var(--font-size-sm)', color: 'var(--color-text-secondary)', display: 'flex', gap: 'var(--space-md)' }}>
+                <div style={{ fontSize: 'var(--font-size-sm)', color: 'var(--color-text-secondary)', display: 'flex', flexWrap: 'wrap', gap: 'var(--space-md)' }}>
                   <span>{d.week_key}</span>
+                  <span style={{ color: 'var(--color-text-muted)' }}>
+                    {d.created_at ? new Date(d.created_at).toLocaleString('ko-KR') : ''}
+                  </span>
                   <span>{(d.title_candidates_json || [])[0] || ''}</span>
                 </div>
               </div>
+              
               <div style={{ display: 'flex', alignItems: 'center', gap: 'var(--space-sm)' }}>
-                <StatusBadge status={d.status} />
-                <span style={{ fontSize: 'var(--font-size-xs)', color: 'var(--color-text-muted)' }}>
-                  {d.created_at ? new Date(d.created_at).toLocaleDateString('ko-KR') : ''}
-                </span>
+                <button
+                  className="btn btn-ghost"
+                  style={{ color: 'var(--color-accent-red)', padding: '0.25rem 0.5rem', fontSize: 'var(--font-size-sm)' }}
+                  onClick={(e) => handleDelete(e, d.id)}
+                >
+                  🗑️ 삭제
+                </button>
               </div>
             </div>
           ))}

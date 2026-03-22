@@ -36,12 +36,21 @@ HEADERS = {
 
 async def collect_issues(db: AsyncSession, week_key: str) -> dict:
     """Run the full collection pipeline for the given week."""
-    run = WeeklyRun(
-        week_key=week_key,
-        status="running",
-        run_started_at=datetime.now(),
-    )
-    db.add(run)
+    # Check if run exists
+    run_result = await db.execute(select(WeeklyRun).where(WeeklyRun.week_key == week_key))
+    run = run_result.scalars().first()
+    
+    if run:
+        run.status = "running"
+        run.run_started_at = datetime.now()
+    else:
+        run = WeeklyRun(
+            week_key=week_key,
+            status="running",
+            run_started_at=datetime.now(),
+        )
+        db.add(run)
+
     await db.flush()
 
     # 중복 URL 체크용
@@ -76,10 +85,13 @@ async def collect_issues(db: AsyncSession, week_key: str) -> dict:
         logger.error(f"Yahoo Finance collection failed: {e}")
         results["errors"].append(f"yahoo_finance: {str(e)}")
 
-    total = results["naver"] + results["yahoo_finance"]
-    run.status = "completed" if total > 0 else "failed"
+    total_new = results["naver"] + results["yahoo_finance"]
+    # 기존 URL 개수와 새로 추가된 개수를 합쳐서 최종 DB 내 소스 개수로 산정
+    total_in_db = len(existing_urls) + total_new
+
+    run.status = "completed" if total_in_db > 0 else "failed"
     run.run_finished_at = datetime.now()
-    run.total_source_count = total
+    run.total_source_count = total_in_db
     run.note = "; ".join(results["errors"]) if results["errors"] else None
 
     await db.commit()

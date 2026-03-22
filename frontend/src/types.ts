@@ -42,6 +42,8 @@ export interface KeywordRanking {
   related_news_count: number
   related_symbol_count: number
   summary_line: string | null
+  keyword_type?: 'traffic' | 'investment' | 'blog_title' | string
+  recommendation_reasons_json?: string[]
   competition_level: 'low' | 'medium' | 'high' | null
   recommended_channel: 'naver' | 'tistory' | 'both' | null
   is_doc_count_100k_plus: boolean

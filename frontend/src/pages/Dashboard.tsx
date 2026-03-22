@@ -105,6 +105,27 @@ export default function Dashboard(): React.JSX.Element {
     }
   }
 
+  const handleDeleteRun = async (e: React.MouseEvent, weekKey: string) => {
+    e.stopPropagation()
+    if (!window.confirm(`'${weekKey}' 실행 이력을 정말 삭제하시겠습니까?\n관련된 모든 데이터(수집된 뉴스, 키워드, 초안)가 함께 영구 삭제됩니다.`)) return
+
+    try {
+      const res = await api.delete<unknown, ApiResponse<{deleted: boolean}>>(`/issues/runs/${weekKey}`)
+      if (res.data?.deleted || res.success) {
+        setWeeks(weeks.filter(w => w.week_key !== weekKey))
+        if (weekDisplay.includes(weekKey)) {
+          setWeekDisplay('')
+          setTopKeywords([])
+        }
+      } else {
+        alert(res.error || '삭제 실패')
+      }
+    } catch (err) {
+      console.error(err)
+      alert('삭제 중 오류가 발생했습니다.')
+    }
+  }
+
   return (
     <div>
       <div className="page-header">
@@ -115,7 +136,7 @@ export default function Dashboard(): React.JSX.Element {
       {/* 현재 주차 표시 */}
       {weekDisplay && (
         <div className="week-display">
-          📅 현재 주차: <strong>{weekDisplay}</strong>
+          📅 현재 수집: <strong>{weekDisplay}</strong>
         </div>
       )}
 
@@ -128,7 +149,7 @@ export default function Dashboard(): React.JSX.Element {
           disabled={collecting}
         >
           {collecting && <span className="spinner" />}
-          {collecting ? '수집 중...' : '🚀 이번주 뉴스 수집'}
+          {collecting ? '수집 중...' : '🚀 수집/키워드 분석 시작'}
         </button>
 
         <button
@@ -154,10 +175,26 @@ export default function Dashboard(): React.JSX.Element {
               <div
                 key={w.id}
                 className="card"
-                style={{ cursor: 'pointer', padding: 'var(--space-md)', minWidth: 180 }}
+                style={{ cursor: 'pointer', padding: 'var(--space-md)', minWidth: 180, position: 'relative' }}
                 onClick={() => navigate(`/keywords/${w.week_key}`)}
               >
                 <div style={{ fontWeight: 600, marginBottom: 4 }}>{w.week_key}</div>
+                <button
+                  onClick={(e) => handleDeleteRun(e, w.week_key)}
+                  style={{
+                    position: 'absolute',
+                    top: '8px',
+                    right: '8px',
+                    background: 'none',
+                    border: 'none',
+                    color: 'var(--color-text-muted)',
+                    cursor: 'pointer',
+                    fontSize: 'var(--font-size-sm)'
+                  }}
+                  title="실행 이력 삭제"
+                >
+                  ✕
+                </button>
                 {w.display && (
                   <div style={{ fontSize: 'var(--font-size-xs)', color: 'var(--color-text-muted)', marginBottom: 4 }}>
                     {w.display}

@@ -40,6 +40,12 @@ async def score_and_rank_keywords(
         delete(KeywordRanking).where(KeywordRanking.week_key == week_key)
     )
 
+    # Fetch all source items for this week for advanced metrics
+    from app.models.source_item import SourceItem
+    result_sources = await db.execute(select(SourceItem).where(SourceItem.week_key == week_key))
+    all_sources = result_sources.scalars().all()
+    source_dict = {s.id: s for s in all_sources}
+
     rankings = []
 
     for cand in candidates:
@@ -54,11 +60,27 @@ async def score_and_rank_keywords(
         document_count = metrics["document_count"]
         keyword_ratio = metrics["keyword_ratio"]
 
+        # Calculate advanced metrics
+        cand_sources = [source_dict[sid] for sid in (cand.source_item_ids_json or []) if sid in source_dict]
+        
+        # 1. Title inclusion
+        title_inclusion_count = sum(1 for s in cand_sources if cand.keyword.lower() in s.title.lower())
+        
+        # 2. Multi source (Naver + Yahoo)
+        sites = {s.source_site for s in cand_sources}
+        is_multi_source = len(sites) > 1
+
         # Calculate scores
+        # Base: news count * 3 + symbol count * 5
+        # Title inclusion: +3 per title
+        # Multi source: +5 bonus
         issue_score = (
             cand.related_news_count * w.get("news_factor", 3)
             + cand.related_symbol_count * w.get("symbol_factor", 5)
+            + title_inclusion_count * 3
+            + (5 if is_multi_source else 0)
         )
+
         search_score = math.log10(search_volume + 1) * 10
         competition_penalty = math.log10(document_count + 1) * 3
 
@@ -84,9 +106,17 @@ async def score_and_rank_keywords(
         else:
             recommended_channel = "both"
 
+        extra_metrics = {
+            "title_inclusion_count": title_inclusion_count,
+            "is_multi_source": is_multi_source,
+            "source_sites": list(sites)
+        }
+
         ranking = KeywordRanking(
             week_key=week_key,
             keyword=cand.keyword,
+            keyword_type=cand.keyword_type,
+            recommendation_reasons_json=cand.recommendation_reasons_json,
             final_score=round(final_score, 2),
             issue_score=round(issue_score, 2),
             search_score=round(search_score, 2),
@@ -100,6 +130,7 @@ async def score_and_rank_keywords(
             competition_level=competition_level,
             recommended_channel=recommended_channel,
             is_doc_count_100k_plus=document_count >= 100000,
+            extra_metrics_json=extra_metrics
         )
         rankings.append(ranking)
 

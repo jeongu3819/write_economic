@@ -134,3 +134,25 @@ async def get_top_keywords(week_key: str, db: AsyncSession = Depends(get_db)):
     return api_response(
         data=[KeywordRankingOut.model_validate(r).model_dump() for r in rankings]
     )
+
+
+@router.delete("/runs/{week_key}")
+async def delete_weekly_run(week_key: str, db: AsyncSession = Depends(get_db)):
+    """Delete a weekly run and all its associated data."""
+    from app.models.blog_draft import BlogDraft
+    from app.models.keyword_candidate import KeywordCandidate
+    from sqlalchemy import delete
+
+    # Delete drafted blogs
+    await db.execute(delete(BlogDraft).where(BlogDraft.week_key == week_key))
+    # Delete rankings
+    await db.execute(delete(KeywordRanking).where(KeywordRanking.week_key == week_key))
+    # Delete candidates
+    await db.execute(delete(KeywordCandidate).where(KeywordCandidate.week_key == week_key))
+    # Delete sources
+    await db.execute(delete(SourceItem).where(SourceItem.week_key == week_key))
+    # Delete run
+    await db.execute(delete(WeeklyRun).where(WeeklyRun.week_key == week_key))
+    
+    await db.commit()
+    return api_response(data={"deleted": True})

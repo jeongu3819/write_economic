@@ -15,30 +15,33 @@ def now_kst() -> datetime:
 
 
 def get_current_week_key() -> str:
-    """Return ISO week key like '2026-W12' based on KST."""
+    """Return today's date as key for rolling 7-day window."""
     today = now_kst()
-    iso = today.isocalendar()
-    return f"{iso[0]}-W{iso[1]:02d}"
+    return today.strftime("%Y-%m-%d")
 
 
 def get_week_date_range(week_key: str) -> tuple[datetime, datetime]:
     """
-    Return (start_of_week_monday, end_of_week_sunday) for a given week_key.
+    Return (start, end) for a given week_key.
     
-    예: week_key='2026-W12'
-      → start = 2026-03-16 00:00:00 KST
-      → end   = 2026-03-22 23:59:59 KST
+    If week_key is ISO week like '2026-W12', use Monday-Sunday.
+    If week_key is '2026-03-23', use rolling 7-day window ending on that date.
     """
-    year, week_part = week_key.split("-W")
-    year = int(year)
-    week = int(week_part)
-    # ISO 주차: 1월 4일이 항상 W01에 포함됨
-    jan4 = datetime(year, 1, 4, tzinfo=KST)
-    # jan4가 속한 주의 월요일
-    start_of_w1 = jan4 - timedelta(days=jan4.isoweekday() - 1)
-    start = start_of_w1 + timedelta(weeks=week - 1)
-    end = start + timedelta(days=6, hours=23, minutes=59, seconds=59)
-    return start, end
+    if "-W" in week_key:
+        year, week_part = week_key.split("-W")
+        year = int(year)
+        week = int(week_part)
+        jan4 = datetime(year, 1, 4, tzinfo=KST)
+        start_of_w1 = jan4 - timedelta(days=jan4.isoweekday() - 1)
+        start = start_of_w1 + timedelta(weeks=week - 1)
+        end = start + timedelta(days=6, hours=23, minutes=59, seconds=59)
+        return start, end
+    else:
+        # Rolling 7-day window
+        end_date = datetime.strptime(week_key, "%Y-%m-%d").replace(tzinfo=KST)
+        end = end_date.replace(hour=23, minute=59, second=59)
+        start = (end - timedelta(days=6)).replace(hour=0, minute=0, second=0)
+        return start, end
 
 
 def get_week_display(week_key: str) -> str:

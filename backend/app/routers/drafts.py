@@ -70,3 +70,18 @@ async def regenerate_draft(draft_id: int, db: AsyncSession = Depends(get_db)):
     return api_response(
         data=BlogDraftOut.model_validate(new_draft).model_dump()
     )
+
+
+@router.delete("/{draft_id}")
+async def delete_draft(draft_id: int, db: AsyncSession = Depends(get_db)):
+    """Delete a draft."""
+    result = await db.execute(
+        select(BlogDraft).where(BlogDraft.id == draft_id)
+    )
+    draft = result.scalars().first()
+    if not draft:
+        return api_response(success=False, error="Draft not found")
+    
+    await db.delete(draft)
+    await db.commit()
+    return api_response(data={"deleted": True})

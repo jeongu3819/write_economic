@@ -8,6 +8,8 @@ class KeywordCandidate(Base):
     id = Column(Integer, primary_key=True, autoincrement=True)
     week_key = Column(String(10), nullable=False, index=True)
     keyword = Column(String(200), nullable=False)
+    keyword_type = Column(String(50))
+    recommendation_reasons_json = Column(JSON)
     origin_summary = Column(Text)
     related_news_count = Column(Integer, default=0)
     related_symbol_count = Column(Integer, default=0)

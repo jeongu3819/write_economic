@@ -18,6 +18,8 @@ class KeywordRankingOut(BaseModel):
     id: int
     week_key: str
     keyword: str
+    keyword_type: Optional[str] = None
+    recommendation_reasons_json: Optional[list[str]] = None
     rank_no: Optional[int] = None
     final_score: Optional[float] = None
     issue_score: Optional[float] = None
