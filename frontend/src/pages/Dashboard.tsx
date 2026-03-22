@@ -12,13 +12,26 @@ export default function Dashboard(): React.JSX.Element {
   const [collecting, setCollecting] = useState(false)
   const pollTimerRef = useRef<ReturnType<typeof setInterval> | null>(null)
   const [statusMsg, setStatusMsg] = useState('')
+  const [weekDisplay, setWeekDisplay] = useState('')
 
   useEffect(() => {
     loadWeeks()
+    loadWeekInfo()
     return () => {
       if (pollTimerRef.current) clearInterval(pollTimerRef.current)
     }
   }, [])
+
+  const loadWeekInfo = async () => {
+    try {
+      const res = await api.get<unknown, ApiResponse<{ week: { week_key: string; display: string } }>>('/health')
+      if (res.data?.week) {
+        setWeekDisplay(`${res.data.week.week_key} (${res.data.week.display})`)
+      }
+    } catch {
+      // ignore
+    }
+  }
 
   const loadWeeks = async (): Promise<void> => {
     try {
@@ -49,8 +62,12 @@ export default function Dashboard(): React.JSX.Element {
     setStatusMsg('수집 파이프라인 시작...')
 
     try {
-      const res = await api.post<unknown, ApiResponse<{ week_key: string; status: string }>>('/issues/collect', {})
+      const res = await api.post<unknown, ApiResponse<{ week_key: string; status: string; display?: string }>>('/issues/collect-weekly', {})
       const weekKey = res.data?.week_key
+
+      if (res.data?.display) {
+        setWeekDisplay(`${weekKey} (${res.data.display})`)
+      }
 
       if (res.data?.status === 'already_running') {
         setStatusMsg('이미 수집이 진행 중입니다.')
@@ -68,7 +85,7 @@ export default function Dashboard(): React.JSX.Element {
             setCollecting(false)
             setStatusMsg('✅ 수집 및 키워드 분석 완료!')
             loadWeeks()
-            loadTopKeywords(weekKey)
+            if (weekKey) loadTopKeywords(weekKey)
           } else if (status === 'failed') {
             clearInterval(timer)
             setCollecting(false)
@@ -95,17 +112,36 @@ export default function Dashboard(): React.JSX.Element {
         <p className="page-subtitle">주간 이슈를 수집하고 블로그 키워드를 분석합니다</p>
       </div>
 
-      <div style={{ marginBottom: 'var(--space-xl)', display: 'flex', alignItems: 'center', gap: 'var(--space-md)' }}>
+      {/* 현재 주차 표시 */}
+      {weekDisplay && (
+        <div className="week-display">
+          📅 현재 주차: <strong>{weekDisplay}</strong>
+        </div>
+      )}
+
+      {/* 상단 버튼 2개 */}
+      <div className="dashboard-actions">
         <button
-          className="btn btn-primary"
+          id="collect-btn"
+          className="btn btn-primary btn-lg"
           onClick={handleCollect}
           disabled={collecting}
-          style={{ padding: '0.75rem 2rem', fontSize: 'var(--font-size-base)' }}
         >
           {collecting && <span className="spinner" />}
-          {collecting ? '수집 중...' : '🚀 이번 주 이슈 수집'}
+          {collecting ? '수집 중...' : '🚀 이번주 뉴스 수집'}
         </button>
-        {statusMsg && <span style={{ fontSize: 'var(--font-size-sm)', color: 'var(--color-text-secondary)' }}>{statusMsg}</span>}
+
+        <button
+          id="ticker-btn"
+          className="btn btn-secondary btn-lg"
+          onClick={() => navigate('/ticker')}
+        >
+          📈 티커 분석
+        </button>
+
+        {statusMsg && (
+          <span className="status-msg">{statusMsg}</span>
+        )}
       </div>
 
       {weeks.length > 0 && (
@@ -122,6 +158,11 @@ export default function Dashboard(): React.JSX.Element {
                 onClick={() => navigate(`/keywords/${w.week_key}`)}
               >
                 <div style={{ fontWeight: 600, marginBottom: 4 }}>{w.week_key}</div>
+                {w.display && (
+                  <div style={{ fontSize: 'var(--font-size-xs)', color: 'var(--color-text-muted)', marginBottom: 4 }}>
+                    {w.display}
+                  </div>
+                )}
                 <div style={{ display: 'flex', gap: 'var(--space-sm)', alignItems: 'center' }}>
                   <StatusBadge status={w.status} />
                   <span style={{ fontSize: 'var(--font-size-xs)', color: 'var(--color-text-muted)' }}>
@@ -152,7 +193,7 @@ export default function Dashboard(): React.JSX.Element {
           <div className="empty-state-icon">📡</div>
           <p>아직 수집된 데이터가 없습니다</p>
           <p style={{ fontSize: 'var(--font-size-sm)', marginTop: 'var(--space-sm)' }}>
-            위의 "이번 주 이슈 수집" 버튼을 눌러 시작하세요
+            위의 "이번 주 뉴스 수집" 버튼을 눌러 시작하세요
           </p>
         </div>
       )}

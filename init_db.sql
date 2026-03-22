@@ -108,3 +108,14 @@ CREATE TABLE IF NOT EXISTS prompt_templates (
   updated_at      DATETIME DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
   INDEX idx_type_active (template_type, is_active)
 ) ENGINE=InnoDB;
+
+-- 7. 티커 분석 캐시
+CREATE TABLE IF NOT EXISTS ticker_analyses (
+  id              INT AUTO_INCREMENT PRIMARY KEY,
+  ticker          VARCHAR(20) NOT NULL,
+  model_used      VARCHAR(50),
+  result_json     JSON NOT NULL,
+  created_at      DATETIME DEFAULT CURRENT_TIMESTAMP,
+  INDEX idx_ticker (ticker),
+  INDEX idx_created (created_at)
+) ENGINE=InnoDB;

@@ -6,12 +6,14 @@ from sqlalchemy import select
 from app.database import get_db
 from app.models.weekly_run import WeeklyRun
 from app.models.source_item import SourceItem
+from app.models.keyword_ranking import KeywordRanking
 from app.schemas.issues import CollectRequest, WeeklyRunOut, SourceItemOut
+from app.schemas.keywords import KeywordRankingOut
 from app.services.collector import collect_issues
 from app.services.keyword_generator import generate_keywords
 from app.services.keyword_scorer import score_and_rank_keywords
 from app.utils.response import api_response
-from app.utils.week import get_current_week_key
+from app.utils.week import get_current_week_key, get_week_display
 
 router = APIRouter(prefix="/api/issues", tags=["issues"])
 
@@ -29,13 +31,13 @@ async def _full_pipeline(week_key: str):
             traceback.print_exc()
 
 
-@router.post("/collect")
-async def collect(
+@router.post("/collect-weekly")
+async def collect_weekly(
     body: CollectRequest,
     background_tasks: BackgroundTasks,
     db: AsyncSession = Depends(get_db),
 ):
-    """Start issue collection pipeline."""
+    """Start weekly issue collection pipeline (월요일~일요일 기준)."""
     week_key = body.week_key or get_current_week_key()
 
     # Check if already running
@@ -46,15 +48,34 @@ async def collect(
     existing = result.scalars().first()
     if existing:
         return api_response(
-            data={"week_key": week_key, "status": "already_running"},
+            data={
+                "week_key": week_key,
+                "status": "already_running",
+                "display": get_week_display(week_key),
+            },
         )
 
     # Run full pipeline in background
     background_tasks.add_task(_full_pipeline, week_key)
 
     return api_response(
-        data={"week_key": week_key, "status": "started"},
+        data={
+            "week_key": week_key,
+            "status": "started",
+            "display": get_week_display(week_key),
+        },
     )
+
+
+# 하위 호환: 기존 /collect 엔드포인트 유지
+@router.post("/collect")
+async def collect(
+    body: CollectRequest,
+    background_tasks: BackgroundTasks,
+    db: AsyncSession = Depends(get_db),
+):
+    """Legacy endpoint — redirects to collect-weekly."""
+    return await collect_weekly(body, background_tasks, db)
 
 
 @router.get("/weeks")
@@ -64,9 +85,12 @@ async def list_weeks(db: AsyncSession = Depends(get_db)):
         select(WeeklyRun).order_by(WeeklyRun.created_at.desc())
     )
     runs = result.scalars().all()
-    return api_response(
-        data=[WeeklyRunOut.model_validate(r).model_dump() for r in runs]
-    )
+    data = []
+    for r in runs:
+        d = WeeklyRunOut.model_validate(r).model_dump()
+        d["display"] = get_week_display(r.week_key)
+        data.append(d)
+    return api_response(data=data)
 
 
 @router.get("/{week_key}/sources")
@@ -92,6 +116,21 @@ async def get_week_status(week_key: str, db: AsyncSession = Depends(get_db)):
     run = result.scalars().first()
     if not run:
         return api_response(data={"status": "not_found"})
+    d = WeeklyRunOut.model_validate(run).model_dump()
+    d["display"] = get_week_display(week_key)
+    return api_response(data=d)
+
+
+@router.get("/{week_key}/top-keywords")
+async def get_top_keywords(week_key: str, db: AsyncSession = Depends(get_db)):
+    """Get top 10 keywords for a week (convenience endpoint)."""
+    result = await db.execute(
+        select(KeywordRanking)
+        .where(KeywordRanking.week_key == week_key)
+        .order_by(KeywordRanking.rank_no)
+        .limit(10)
+    )
+    rankings = result.scalars().all()
     return api_response(
-        data=WeeklyRunOut.model_validate(run).model_dump()
+        data=[KeywordRankingOut.model_validate(r).model_dump() for r in rankings]
     )

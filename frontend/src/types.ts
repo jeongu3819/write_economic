@@ -10,6 +10,7 @@ export interface WeeklyRun {
   run_finished_at: string | null
   note: string | null
   created_at: string | null
+  display?: string
 }
 
 export interface SourceItem {
@@ -63,6 +64,56 @@ export interface BlogDraft {
   status: 'draft' | 'archived'
   created_at: string | null
   updated_at: string | null
+}
+
+// ── 티커 분석 관련 타입 ──
+
+export interface NewsItem {
+  type: string
+  title: string
+  link: string
+  date: string
+  relative_time: string
+  summary: string
+}
+
+export interface TickerAnalysis {
+  ticker: string
+  company_overview: string
+  news: NewsItem[]
+  filings: NewsItem[]
+  short_interest: string
+  short_interest_pct: string | null
+  trader_sentiment: '긍정' | '부정' | '중립'
+  trader_interpretation: string
+  links: {
+    overview: string
+    news: string
+    sec_filings: string
+  }
+  model_used: string
+  analyzed_at: string
+}
+
+export interface TickerBlogResult {
+  ticker: string
+  titles: string[]
+  intros: string[]
+  body: string
+  summary: string
+  hashtags: string[]
+  caution: string
+  platform: string
+}
+
+export interface ModelInfo {
+  id: string
+  owned_by: string
+}
+
+export interface ModelsData {
+  models: ModelInfo[]
+  default_model: string
 }
 
 export interface ApiResponse<T> {

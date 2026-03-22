@@ -1,19 +1,62 @@
-from datetime import datetime, timedelta
+"""
+주간 범위 계산 유틸리티
+- Asia/Seoul 타임존 기준
+- 월요일 00:00:00 ~ 일요일 23:59:59
+"""
+from datetime import datetime, timedelta, timezone
+
+# Asia/Seoul = UTC+9 (DST 없음)
+KST = timezone(timedelta(hours=9))
+
+
+def now_kst() -> datetime:
+    """현재 KST 시각."""
+    return datetime.now(KST)
 
 
 def get_current_week_key() -> str:
-    """Return ISO week key like '2026-W12'."""
-    today = datetime.now()
+    """Return ISO week key like '2026-W12' based on KST."""
+    today = now_kst()
     iso = today.isocalendar()
     return f"{iso[0]}-W{iso[1]:02d}"
 
 
 def get_week_date_range(week_key: str) -> tuple[datetime, datetime]:
-    """Return (start_of_week_monday, end_of_week_sunday) for a given week_key."""
+    """
+    Return (start_of_week_monday, end_of_week_sunday) for a given week_key.
+    
+    예: week_key='2026-W12'
+      → start = 2026-03-16 00:00:00 KST
+      → end   = 2026-03-22 23:59:59 KST
+    """
     year, week_part = week_key.split("-W")
     year = int(year)
     week = int(week_part)
-    jan4 = datetime(year, 1, 4)
-    start = jan4 - timedelta(days=jan4.isoweekday() - 1) + timedelta(weeks=week - 1)
+    # ISO 주차: 1월 4일이 항상 W01에 포함됨
+    jan4 = datetime(year, 1, 4, tzinfo=KST)
+    # jan4가 속한 주의 월요일
+    start_of_w1 = jan4 - timedelta(days=jan4.isoweekday() - 1)
+    start = start_of_w1 + timedelta(weeks=week - 1)
     end = start + timedelta(days=6, hours=23, minutes=59, seconds=59)
     return start, end
+
+
+def get_week_display(week_key: str) -> str:
+    """
+    주차의 날짜 범위를 표시 문자열로 반환.
+    예: '2026-W12' → '2026-03-16 ~ 2026-03-22'
+    """
+    start, end = get_week_date_range(week_key)
+    return f"{start.strftime('%Y-%m-%d')} ~ {end.strftime('%Y-%m-%d')}"
+
+
+def get_week_info() -> dict:
+    """현재 주차 정보를 딕셔너리로 반환."""
+    week_key = get_current_week_key()
+    start, end = get_week_date_range(week_key)
+    return {
+        "week_key": week_key,
+        "start_date": start.strftime("%Y-%m-%d"),
+        "end_date": end.strftime("%Y-%m-%d"),
+        "display": get_week_display(week_key),
+    }

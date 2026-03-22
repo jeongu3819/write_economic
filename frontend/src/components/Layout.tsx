@@ -27,6 +27,9 @@ function Sidebar(): React.JSX.Element {
         <NavLink to="/" className={({ isActive }) => `sidebar-link ${isActive ? 'active' : ''}`} end>
           🏠 대시보드
         </NavLink>
+        <NavLink to="/ticker" className={({ isActive }) => `sidebar-link ${isActive ? 'active' : ''}`}>
+          📈 티커 분석
+        </NavLink>
         <NavLink to="/drafts" className={({ isActive }) => `sidebar-link ${isActive ? 'active' : ''}`}>
           📝 저장된 초안
         </NavLink>
@@ -35,8 +38,9 @@ function Sidebar(): React.JSX.Element {
       <div className="sidebar-section-title">도움말</div>
       <div style={{ fontSize: 'var(--font-size-xs)', color: 'var(--color-text-muted)', padding: '0 var(--space-sm)' }}>
         1. 대시보드에서 이슈 수집<br/>
-        2. 키워드 카드 클릭<br/>
-        3. 초안 생성 & 복사
+        2. 키워드 카드 클릭 → 초안 생성<br/>
+        3. 티커 분석 → 블로그 변환<br/>
+        4. 복사 버튼으로 가져가기
       </div>
     </aside>
   )
