@@ -15,10 +15,26 @@ router = APIRouter(prefix="/api/drafts", tags=["drafts"])
 @router.post("/generate")
 async def create_draft(body: DraftGenerateRequest, db: AsyncSession = Depends(get_db)):
     """Generate a new blog draft for a keyword ranking."""
-    draft = await generate_draft(db, body.keyword_ranking_id)
+    draft = await generate_draft(db, body.keyword_ranking_id, body.model)
     return api_response(
         data=BlogDraftOut.model_validate(draft).model_dump()
     )
+
+
+@router.get("/by-ranking/{ranking_id}")
+async def get_draft_by_ranking(ranking_id: int, db: AsyncSession = Depends(get_db)):
+    """Get a draft by its keyword ranking id."""
+    result = await db.execute(
+        select(BlogDraft)
+        .where(BlogDraft.keyword_ranking_id == ranking_id, BlogDraft.status == "draft")
+        .order_by(BlogDraft.created_at.desc())
+    )
+    draft = result.scalars().first()
+    if not draft:
+        return api_response(data=None)
+    return api_response(data=BlogDraftOut.model_validate(draft).model_dump())
+
+
 
 
 @router.get("")
@@ -53,8 +69,12 @@ async def get_draft(draft_id: int, db: AsyncSession = Depends(get_db)):
 
 
 @router.post("/{draft_id}/regenerate")
-async def regenerate_draft(draft_id: int, db: AsyncSession = Depends(get_db)):
-    """Regenerate a draft (creates a new version)."""
+async def regenerate_draft(
+    draft_id: int, 
+    model: str = Query(default=None),
+    db: AsyncSession = Depends(get_db)
+):
+    """Regenerate a draft (creates a new version) with a selected model."""
     result = await db.execute(
         select(BlogDraft).where(BlogDraft.id == draft_id)
     )
@@ -66,7 +86,7 @@ async def regenerate_draft(draft_id: int, db: AsyncSession = Depends(get_db)):
     old_draft.status = "archived"
 
     # Generate new
-    new_draft = await generate_draft(db, old_draft.keyword_ranking_id)
+    new_draft = await generate_draft(db, old_draft.keyword_ranking_id, model)
     return api_response(
         data=BlogDraftOut.model_validate(new_draft).model_dump()
     )

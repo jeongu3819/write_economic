@@ -71,7 +71,7 @@ KEYWORD_SCHEMA = {
 }
 
 
-async def generate_keywords(db: AsyncSession, week_key: str) -> list[KeywordCandidate]:
+async def generate_keywords(db: AsyncSession, week_key: str, model: str = None) -> list[KeywordCandidate]:
     """Generate keyword candidates from collected source items."""
 
     # Fetch source items for this week
@@ -93,15 +93,15 @@ async def generate_keywords(db: AsyncSession, week_key: str) -> list[KeywordCand
 
     # Call OpenAI
     try:
-        response = await client.responses.create(
-            model=OPENAI_MODEL,
-            input=[
+        response = await client.chat.completions.create(
+            model=model or OPENAI_MODEL,
+            messages=[
                 {"role": "system", "content": KEYWORD_EXTRACTION_PROMPT},
                 {"role": "user", "content": f"이번 주({week_key}) 수집된 뉴스/이슈:\n\n{source_text}"},
             ],
-            text={
-                "format": {
-                    "type": "json_schema",
+            response_format={
+                "type": "json_schema",
+                "json_schema": {
                     "name": "keyword_candidates",
                     "schema": KEYWORD_SCHEMA,
                     "strict": True,
@@ -109,7 +109,7 @@ async def generate_keywords(db: AsyncSession, week_key: str) -> list[KeywordCand
             },
         )
 
-        output_text = response.output_text
+        output_text = response.choices[0].message.content
         data = json.loads(output_text)
         keyword_list = data.get("keywords", [])
 

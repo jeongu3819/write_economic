@@ -1,4 +1,5 @@
 """Issues/Collection router."""
+from typing import Optional
 from fastapi import APIRouter, Depends, BackgroundTasks
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy import select
@@ -18,13 +19,13 @@ from app.utils.week import get_current_week_key, get_week_display
 router = APIRouter(prefix="/api/issues", tags=["issues"])
 
 
-async def _full_pipeline(week_key: str):
+async def _full_pipeline(week_key: str, model: Optional[str] = None):
     """Background task: collect → generate keywords → score & rank."""
     from app.database import async_session
     async with async_session() as db:
         try:
             await collect_issues(db, week_key)
-            await generate_keywords(db, week_key)
+            await generate_keywords(db, week_key, model=model)
             await score_and_rank_keywords(db, week_key)
         except Exception as e:
             import traceback
@@ -56,7 +57,7 @@ async def collect_weekly(
         )
 
     # Run full pipeline in background
-    background_tasks.add_task(_full_pipeline, week_key)
+    background_tasks.add_task(_full_pipeline, week_key, body.model)
 
     return api_response(
         data={

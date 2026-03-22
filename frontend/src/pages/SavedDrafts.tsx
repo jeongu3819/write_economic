@@ -94,8 +94,16 @@ export default function SavedDrafts(): React.JSX.Element {
             >
               <div>
                 <div style={{ display: 'flex', alignItems: 'center', gap: 'var(--space-sm)', marginBottom: 4 }}>
-                  <div style={{ fontWeight: 600, fontSize: 'var(--font-size-lg)' }}>
+                  <div style={{ fontWeight: 600, fontSize: 'var(--font-size-lg)', display: 'flex', alignItems: 'center', gap: '8px' }}>
                     {d.keyword}
+                    <div style={{ display: 'flex', gap: '4px' }}>
+                      {d.body_naver && (
+                         <span style={{ background: '#03C75A', color: 'white', padding: '2px 6px', borderRadius: '4px', fontSize: '10px', fontWeight: 'bold' }}>N</span>
+                      )}
+                      {d.body_tistory_md && (
+                         <span style={{ background: '#EB531F', color: 'white', padding: '2px 6px', borderRadius: '4px', fontSize: '10px', fontWeight: 'bold' }}>T</span>
+                      )}
+                    </div>
                   </div>
                   <StatusBadge status={d.status} />
                 </div>

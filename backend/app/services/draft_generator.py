@@ -7,7 +7,7 @@ from openai import AsyncOpenAI
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy import select
 
-from app.config import OPENAI_API_KEY, OPENAI_MODEL
+from app.config import OPENAI_API_KEY, OPENAI_MODEL, OPENAI_DRAFT_MODEL
 from app.models.keyword_ranking import KeywordRanking
 from app.models.source_item import SourceItem
 from app.models.blog_draft import BlogDraft
@@ -21,7 +21,7 @@ logger = get_logger("draft_generator")
 client = AsyncOpenAI(api_key=OPENAI_API_KEY)
 
 
-async def generate_draft(db: AsyncSession, keyword_ranking_id: int) -> BlogDraft:
+async def generate_draft(db: AsyncSession, keyword_ranking_id: int, model: str = None) -> BlogDraft:
     """Generate a blog draft for the given keyword ranking."""
 
     # Fetch keyword ranking
@@ -49,27 +49,33 @@ async def generate_draft(db: AsyncSession, keyword_ranking_id: int) -> BlogDraft
         user_prompt=f"키워드: {ranking.keyword}\n이슈 요약: {ranking.summary_line}\n\n관련 뉴스/이슈:\n{source_text}",
         schema=ANALYSIS_SCHEMA,
         schema_name="analysis_result",
+        model=model,
     )
 
     analysis_json_str = json.dumps(analysis_data, ensure_ascii=False)
 
-    # --- Step 2: Naver Blog ---
-    logger.info(f"Generating Naver blog draft for '{ranking.keyword}'...")
-    naver_data = await _call_openai(
+    import asyncio
+
+    # --- Step 2 & 3: Naver & Tistory Blog in PARALLEL ---
+    logger.info(f"Generating Naver & Tistory blog drafts for '{ranking.keyword}' in parallel...")
+    
+    naver_task = _call_openai(
         system_prompt=NAVER_BLOG_SYSTEM_PROMPT,
         user_prompt=f"아래 분석 자료를 바탕으로 네이버 블로그 글을 작성해주세요:\n\n{analysis_json_str}",
         schema=NAVER_BLOG_SCHEMA,
         schema_name="naver_blog_result",
+        model=model,
     )
-
-    # --- Step 3: Tistory Blog ---
-    logger.info(f"Generating Tistory blog draft for '{ranking.keyword}'...")
-    tistory_data = await _call_openai(
+    
+    tistory_task = _call_openai(
         system_prompt=TISTORY_BLOG_SYSTEM_PROMPT,
         user_prompt=f"아래 분석 자료를 바탕으로 티스토리 블로그 글을 작성해주세요:\n\n{analysis_json_str}",
         schema=TISTORY_BLOG_SCHEMA,
         schema_name="tistory_blog_result",
+        model=model,
     )
+
+    naver_data, tistory_data = await asyncio.gather(naver_task, tistory_task)
 
     # --- Save Draft ---
     draft = BlogDraft(
@@ -101,25 +107,27 @@ async def _call_openai(
     user_prompt: str,
     schema: dict,
     schema_name: str,
+    model: str = None,
 ) -> dict:
     """Call OpenAI Responses API with structured output."""
     try:
-        response = await client.responses.create(
-            model=OPENAI_MODEL,
-            input=[
+        response = await client.chat.completions.create(
+            model=model or OPENAI_DRAFT_MODEL,
+            messages=[
                 {"role": "system", "content": system_prompt},
                 {"role": "user", "content": user_prompt},
             ],
-            text={
-                "format": {
-                    "type": "json_schema",
+            response_format={
+                "type": "json_schema",
+                "json_schema": {
                     "name": schema_name,
                     "schema": schema,
                     "strict": True,
                 }
             },
         )
-        return json.loads(response.output_text)
+        output_text = response.choices[0].message.content
+        return json.loads(output_text)
     except Exception as e:
         logger.error(f"OpenAI call failed ({schema_name}): {e}")
         raise

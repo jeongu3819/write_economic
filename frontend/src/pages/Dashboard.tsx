@@ -3,7 +3,7 @@ import { useNavigate } from 'react-router-dom'
 import api from '../api/client'
 import KeywordCard from '../components/KeywordCard'
 import StatusBadge from '../components/StatusBadge'
-import type { WeeklyRun, KeywordRanking, ApiResponse } from '../types'
+import type { WeeklyRun, KeywordRanking, ApiResponse, ModelInfo } from '../types'
 
 export default function Dashboard(): React.JSX.Element {
   const navigate = useNavigate()
@@ -13,14 +13,30 @@ export default function Dashboard(): React.JSX.Element {
   const pollTimerRef = useRef<ReturnType<typeof setInterval> | null>(null)
   const [statusMsg, setStatusMsg] = useState('')
   const [weekDisplay, setWeekDisplay] = useState('')
+  
+  const [models, setModels] = useState<ModelInfo[]>([])
+  const [selectedModel, setSelectedModel] = useState<string>('')
 
   useEffect(() => {
     loadWeeks()
     loadWeekInfo()
+    loadModels()
     return () => {
       if (pollTimerRef.current) clearInterval(pollTimerRef.current)
     }
   }, [])
+
+  const loadModels = async () => {
+    try {
+      const res = await api.get<unknown, ApiResponse<{ models: ModelInfo[]; default_model: string }>>('/models')
+      if (res.data?.models) {
+        setModels(res.data.models)
+        setSelectedModel(res.data.default_model || res.data.models[0]?.id || '')
+      }
+    } catch (err) {
+      console.error('Failed to load models:', err)
+    }
+  }
 
   const loadWeekInfo = async () => {
     try {
@@ -62,7 +78,9 @@ export default function Dashboard(): React.JSX.Element {
     setStatusMsg('수집 파이프라인 시작...')
 
     try {
-      const res = await api.post<unknown, ApiResponse<{ week_key: string; status: string; display?: string }>>('/issues/collect-weekly', {})
+      const res = await api.post<unknown, ApiResponse<{ week_key: string; status: string; display?: string }>>('/issues/collect-weekly', {
+        model: selectedModel || undefined
+      })
       const weekKey = res.data?.week_key
 
       if (res.data?.display) {
@@ -140,8 +158,21 @@ export default function Dashboard(): React.JSX.Element {
         </div>
       )}
 
-      {/* 상단 버튼 2개 */}
-      <div className="dashboard-actions">
+      <div className="dashboard-actions" style={{ alignItems: 'center' }}>
+        {models.length > 0 && (
+          <select 
+            className="input" 
+            style={{ width: '160px', padding: '10px', height: 'auto', alignSelf: 'stretch' }}
+            value={selectedModel}
+            onChange={(e) => setSelectedModel(e.target.value)}
+            disabled={collecting}
+          >
+            {models.map(m => (
+              <option key={m.id} value={m.id}>{m.id}</option>
+            ))}
+          </select>
+        )}
+
         <button
           id="collect-btn"
           className="btn btn-primary btn-lg"
@@ -212,7 +243,7 @@ export default function Dashboard(): React.JSX.Element {
         </div>
       )}
 
-      {topKeywords.length > 0 && (
+      {topKeywords.length > 0 && !collecting && (
         <div>
           <h2 style={{ fontSize: 'var(--font-size-lg)', fontWeight: 600, marginBottom: 'var(--space-md)' }}>
             🏆 상위 키워드 Top 10
@@ -220,6 +251,21 @@ export default function Dashboard(): React.JSX.Element {
           <div className="keyword-grid">
             {topKeywords.map((k) => (
               <KeywordCard key={k.id} ranking={k} />
+            ))}
+          </div>
+        </div>
+      )}
+
+      {collecting && (
+        <div style={{ marginTop: 'var(--space-xl)' }}>
+          <h2 style={{ fontSize: 'var(--font-size-lg)', fontWeight: 600, marginBottom: 'var(--space-md)' }}>
+             🏆 상위 키워드 분석 중...
+          </h2>
+          <div className="keyword-grid" style={{ opacity: 0.5 }}>
+            {[1, 2, 3].map(i => (
+              <div key={i} className="card keyword-card" style={{ height: '220px', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
+                <div className="spinner" />
+              </div>
             ))}
           </div>
         </div>

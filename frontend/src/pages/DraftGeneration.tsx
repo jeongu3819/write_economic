@@ -2,7 +2,7 @@ import { useState, useEffect } from 'react'
 import { useParams } from 'react-router-dom'
 import api from '../api/client'
 import CopyButton from '../components/CopyButton'
-import type { BlogDraft, ApiResponse } from '../types'
+import type { BlogDraft, ApiResponse, ModelInfo } from '../types'
 
 export default function DraftGeneration(): React.JSX.Element | null {
   const { rankingId } = useParams<{ rankingId: string }>()
@@ -11,10 +11,45 @@ export default function DraftGeneration(): React.JSX.Element | null {
   const [activeTab, setActiveTab] = useState<'naver' | 'tistory'>('naver')
   const [saved, setSaved] = useState(false)
   const [error, setError] = useState('')
+  const [models, setModels] = useState<ModelInfo[]>([])
+  const [selectedModel, setSelectedModel] = useState<string>('')
+  const [loadingInitial, setLoadingInitial] = useState(true)
 
   useEffect(() => {
-    generateDraft()
+    loadModels()
+    checkExistingDraft()
   }, [rankingId])
+
+  const loadModels = async () => {
+    try {
+      const res = await api.get<unknown, ApiResponse<{ models: ModelInfo[]; default_model: string }>>('/models')
+      if (res.data?.models) {
+        setModels(res.data.models)
+        const draftModel = res.data.models.find(m => m.id.includes('5.4') && !m.id.includes('mini'))?.id
+        setSelectedModel(draftModel || res.data.default_model || res.data.models[0]?.id || '')
+      }
+    } catch {
+      // ignore
+    }
+  }
+
+  const checkExistingDraft = async () => {
+    setLoadingInitial(true)
+    setError('')
+    try {
+      const res = await api.get<unknown, ApiResponse<BlogDraft>>(`/drafts/by-ranking/${rankingId}`)
+      if (res.data) {
+        setDraft(res.data)
+        setSaved(true)
+      } else {
+        setDraft(null)
+      }
+    } catch {
+      // ignore
+    } finally {
+      setLoadingInitial(false)
+    }
+  }
 
   const generateDraft = async (): Promise<void> => {
     setGenerating(true)
@@ -22,6 +57,7 @@ export default function DraftGeneration(): React.JSX.Element | null {
     try {
       const res = await api.post<unknown, ApiResponse<BlogDraft>>('/drafts/generate', {
         keyword_ranking_id: parseInt(rankingId || '0'),
+        model: selectedModel || undefined,
       })
       setDraft(res.data)
       setSaved(true)
@@ -37,7 +73,8 @@ export default function DraftGeneration(): React.JSX.Element | null {
     setGenerating(true)
     setError('')
     try {
-      const res = await api.post<unknown, ApiResponse<BlogDraft>>(`/drafts/${draft.id}/regenerate`)
+      const queryModel = selectedModel ? `?model=${selectedModel}` : ''
+      const res = await api.post<unknown, ApiResponse<BlogDraft>>(`/drafts/${draft.id}/regenerate${queryModel}`)
       setDraft(res.data)
     } catch (err) {
       setError(`재생성 실패: ${err instanceof Error ? err.message : String(err)}`)
@@ -55,12 +92,50 @@ export default function DraftGeneration(): React.JSX.Element | null {
     return `${titles[0] || ''}\n\n${(draft.intro_candidates_json || [])[0] || ''}\n\n${body || ''}\n\n${hashtags}\n\n${draft.caution_note || ''}`
   }
 
+  const renderMarkdownText = (text: string) => {
+    if (!text) return ''
+    
+    // Split by lines to handle block elements safely
+    const lines = text.split('\n')
+    let html = ''
+    for (let i = 0; i < lines.length; i++) {
+        let line = lines[i].replace(/\*\*(.*?)\*\*/g, '<strong>$1</strong>')
+        
+        let isHeader = false
+        if (line.startsWith('### ')) {
+            line = `<div style="font-weight: bold; font-size: 15px; margin-top: 12px; margin-bottom: 6px;">${line.substring(4)}</div>`
+            isHeader = true
+        } else if (line.startsWith('## ')) {
+            line = `<div style="font-weight: bold; font-size: 16px; margin-top: 16px; margin-bottom: 8px;">${line.substring(3)}</div>`
+            isHeader = true
+        } else if (line.startsWith('# ')) {
+            line = `<div style="font-weight: bold; font-size: 18px; margin-top: 20px; margin-bottom: 10px;">${line.substring(2)}</div>`
+            isHeader = true
+        }
+        
+        html += line
+        // Don't add BR if it's a header block, or if it's the last line
+        if (!isHeader && i < lines.length - 1) {
+            html += '<br/>'
+        }
+    }
+    return html
+  }
+
+  if (loadingInitial) {
+    return (
+      <div className="loading-container" style={{ minHeight: '60vh' }}>
+        <div className="spinner" style={{ width: 40, height: 40 }} />
+      </div>
+    )
+  }
+
   if (generating) {
     return (
       <div className="loading-container" style={{ minHeight: '60vh' }}>
         <div className="spinner" style={{ width: 40, height: 40 }} />
-        <span style={{ fontSize: 'var(--font-size-lg)' }}>🤖 AI가 블로그 초안을 생성하고 있습니다...</span>
-        <span style={{ fontSize: 'var(--font-size-sm)', color: 'var(--color-text-muted)' }}>약 30~60초 소요됩니다</span>
+        <span style={{ fontSize: 'var(--font-size-lg)' }}>🤖 선택하신 AI가 블로그 초안을 생성하고 있습니다...</span>
+        <span style={{ fontSize: 'var(--font-size-sm)', color: 'var(--color-text-muted)' }}>약 10~20초 소요됩니다</span>
       </div>
     )
   }
@@ -77,6 +152,33 @@ export default function DraftGeneration(): React.JSX.Element | null {
     )
   }
 
+  if (!draft && !error) {
+    return (
+      <div className="empty-state" style={{ minHeight: '60vh' }}>
+        <div className="empty-state-icon">📝</div>
+        <p>이 키워드로 새로운 블로그 초안을 생성합니다.</p>
+        <p style={{ fontSize: 'var(--font-size-sm)', color: 'var(--color-text-muted)', marginBottom: 'var(--space-lg)' }}>
+          작성할 AI 모델을 선택한 후 생성 버튼을 눌러주세요.
+        </p>
+        <div style={{ display: 'flex', gap: 'var(--space-sm)', alignItems: 'center' }}>
+          <select 
+            className="input" 
+            style={{ width: '160px', padding: '10px' }}
+            value={selectedModel}
+            onChange={(e) => setSelectedModel(e.target.value)}
+          >
+            {models.map(m => (
+              <option key={m.id} value={m.id}>{m.id}</option>
+            ))}
+          </select>
+          <button className="btn btn-primary btn-lg" onClick={generateDraft}>
+            🚀 초안 생성 시작
+          </button>
+        </div>
+      </div>
+    )
+  }
+
   if (!draft) return null
 
   return (
@@ -86,8 +188,20 @@ export default function DraftGeneration(): React.JSX.Element | null {
           <h1 className="page-title">{draft.keyword}</h1>
           <p className="page-subtitle">{draft.week_key} · {saved ? '✅ 저장됨' : ''}</p>
         </div>
-        <div style={{ display: 'flex', gap: 'var(--space-sm)' }}>
-          <CopyButton text={getFullText()} label="전체 복사" />
+        <div style={{ display: 'flex', gap: 'var(--space-sm)', alignItems: 'center' }}>
+          <CopyButton text={getFullText()} label="전체 복사" showMobileCopy={true} />
+          
+          <select 
+            className="input" 
+            style={{ padding: '8px', fontSize: 'var(--font-size-sm)', height: '100%' }}
+            value={selectedModel}
+            onChange={(e) => setSelectedModel(e.target.value)}
+          >
+            {models.map(m => (
+              <option key={m.id} value={m.id}>{m.id}</option>
+            ))}
+          </select>
+
           <button className="btn btn-secondary" onClick={handleRegenerate}>
             🔄 재생성
           </button>
@@ -135,12 +249,13 @@ export default function DraftGeneration(): React.JSX.Element | null {
           <CopyButton
             text={(activeTab === 'naver' ? draft.body_naver : draft.body_tistory_md) || ''}
             label="복사"
+            showMobileCopy={true}
           />
         </div>
         <div className="draft-body" dangerouslySetInnerHTML={{
           __html: activeTab === 'tistory' && draft.body_tistory_html
             ? draft.body_tistory_html
-            : (activeTab === 'naver' ? draft.body_naver : draft.body_tistory_md)?.replace(/\n/g, '<br/>') || ''
+            : renderMarkdownText((activeTab === 'naver' ? draft.body_naver : draft.body_tistory_md) || '')
         }} />
       </div>
 

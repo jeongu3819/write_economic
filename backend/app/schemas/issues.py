@@ -5,6 +5,7 @@ from datetime import datetime
 
 class CollectRequest(BaseModel):
     week_key: Optional[str] = None
+    model: Optional[str] = None
 
 
 class WeeklyRunOut(BaseModel):

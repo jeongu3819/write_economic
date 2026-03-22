@@ -5,6 +5,7 @@ from datetime import datetime
 
 class DraftGenerateRequest(BaseModel):
     keyword_ranking_id: int
+    model: Optional[str] = None
 
 
 class BlogDraftOut(BaseModel):

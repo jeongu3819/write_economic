@@ -17,7 +17,8 @@ DATABASE_URL = (
 
 # --- OpenAI ---
 OPENAI_API_KEY = os.getenv("OPENAI_API_KEY", "")
-OPENAI_MODEL = os.getenv("OPENAI_MODEL", "gpt-4o")
+OPENAI_MODEL = os.getenv("OPENAI_MODEL", "gpt-5.4-mini")  # 키워드 수집/분류용
+OPENAI_DRAFT_MODEL = os.getenv("OPENAI_DRAFT_MODEL", "gpt-5.4")  # 글쓰기 작성용
 
 # --- Server ---
 BACKEND_PORT = int(os.getenv("BACKEND_PORT", "8000"))

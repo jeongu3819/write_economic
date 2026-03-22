@@ -339,15 +339,15 @@ async def _generate_trader_interpretation(analysis: dict, model: str) -> dict:
 
 위 정보를 바탕으로 트레이더 관점의 해석을 제공해주세요."""
 
-    response = await client.responses.create(
+    response = await client.chat.completions.create(
         model=model,
-        input=[
+        messages=[
             {"role": "system", "content": TRADER_ANALYSIS_PROMPT},
             {"role": "user", "content": user_prompt},
         ],
-        text={
-            "format": {
-                "type": "json_schema",
+        response_format={
+            "type": "json_schema",
+            "json_schema": {
                 "name": "trader_interpretation",
                 "schema": TRADER_SCHEMA,
                 "strict": True,
@@ -355,4 +355,5 @@ async def _generate_trader_interpretation(analysis: dict, model: str) -> dict:
         },
     )
 
-    return json.loads(response.output_text)
+    output_text = response.choices[0].message.content
+    return json.loads(output_text)
